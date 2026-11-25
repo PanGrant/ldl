@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ldl"
+description = "Layout Definition Language — 声明式 UI 布局图纸（L1）+ 语料普查零漂移门（L2 验证装置）"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dynamic = ["version"]
+
+[tool.setuptools]
+packages = ["ldl"]
+
+[tool.setuptools.dynamic]
+version = { attr = "ldl.__version__" }
