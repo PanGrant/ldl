@@ -41,12 +41,14 @@ class ContractSpec:
 @dataclass
 class RowSpec:
     """一个座位：角色 + 高度模型 + 契约。行高多数可变，fixed(...) 指
-    向 habits 里的一个固定高度量名。"""
+    向 habits 里的一个物种固定高度，或 measured 里的一个每运行实测
+    槽位（窗口几何——宪法第三条：答案永远是测量）。"""
     role: str
     height: str                    # "variable" 或 "fixed(<habit_key>)"
     contract: ContractSpec
 
-    def validate(self, habits: Dict) -> List[str]:
+    def validate(self, habits: Dict, measured: Optional[List[str]] = None
+                 ) -> List[str]:
         errs = list(self.contract.validate())
         if not self.role or not isinstance(self.role, str):
             errs.append("role 必须是非空字符串")
@@ -54,8 +56,9 @@ class RowSpec:
             pass
         elif self.height.startswith("fixed(") and self.height.endswith(")"):
             key = self.height[len("fixed("):-1]
-            if key not in habits:
-                errs.append(f"fixed 高度指向未知习性键: {key}")
+            if key not in habits and key not in (measured or []):
+                errs.append(f"fixed 高度指向未知键（习性/实测槽位都没有）:"
+                            f" {key}")
         else:
             errs.append(f"height 必须是 'variable' 或 'fixed(<habit_key>)': "
                         f"{self.height!r}")
@@ -89,11 +92,15 @@ class LayoutDef:
     columns: Dict[str, ColumnSpec] = field(default_factory=dict)
     rows: List[RowSpec] = field(default_factory=list)
     habits: Dict[str, Dict] = field(default_factory=dict)  # 键 → {value, evidence}
+    measured: List[str] = field(default_factory=list)  # 每运行实测槽位名（窗口几何）
 
     def validate(self) -> List[str]:
         errs = []
         if not self.app:
             errs.append("app 必须非空")
+        for name in self.measured:
+            if not name or not isinstance(name, str):
+                errs.append(f"measured 槽位名必须是非空字符串: {name!r}")
         for col in self.columns.values():
             errs.extend(col.validate())
         seen = set()
@@ -101,7 +108,7 @@ class LayoutDef:
             if row.role in seen:
                 errs.append(f"角色重复: {row.role}")
             seen.add(row.role)
-            errs.extend(row.validate(self.habits))
+            errs.extend(row.validate(self.habits, self.measured))
             for gate in row.contract.gates:
                 if gate not in self.habits:
                     errs.append(f"行 {row.role} 的门 {gate!r} 不在 habits 表")
@@ -113,6 +120,10 @@ class LayoutDef:
             if "value" not in h or "evidence" not in h:
                 errs.append(f"习性 {key} 缺 value/evidence（每条声明必须"
                             f"带证据出处）")
+        clash = set(self.habits) & set(self.measured)
+        if clash:
+            errs.append(f"键同时出现在 habits 和 measured（物种习性 vs "
+                        f"窗口几何，必须二选一）: {sorted(clash)}")
         return errs
 
     def to_dict(self) -> Dict:
@@ -125,7 +136,8 @@ class LayoutDef:
                         contract=ContractSpec(**r["contract"]))
                 for r in d.get("rows") or []]
         return cls(app=d.get("app", ""), columns=cols, rows=rows,
-                   habits=d.get("habits") or {})
+                   habits=d.get("habits") or {},
+                   measured=list(d.get("measured") or []))
 
 
 # 像素探针注册表：例外若不是物种习性，必须是这里登记过的探针名。

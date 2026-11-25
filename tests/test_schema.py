@@ -49,6 +49,25 @@ class TestSchema(unittest.TestCase):
         d.rows[0].height = "fixed(unknown_h)"
         self.assertTrue(any("unknown_h" in e for e in d.validate()))
 
+    def test_fixed_height_may_reference_measured_slot(self):
+        d = _doorplate_style()
+        d.rows[0].height = "fixed(slot_h)"
+        d.measured = ["slot_h"]
+        self.assertEqual(d.validate(), [])
+
+    def test_habit_and_measured_must_not_clash(self):
+        d = _doorplate_style()
+        d.measured = [next(iter(d.habits))]
+        self.assertTrue(any("同时出现" in e for e in d.validate()))
+
+    def test_measured_roundtrip(self):
+        d = _doorplate_style()
+        d.measured = ["slot_a", "slot_b"]
+        self.assertEqual(d.validate(), [])
+        d2 = LayoutDef.from_dict(d.to_dict())
+        self.assertEqual(d2.measured, ["slot_a", "slot_b"])
+        self.assertEqual(d2.to_dict(), d.to_dict())
+
     def test_roundtrip(self):
         d = _doorplate_style()
         self.assertEqual(d.validate(), [])
